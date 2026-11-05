@@ -9,7 +9,7 @@ Run agents on any of your devices and coordinate their work through one hub. Giv
   <img alt="Defleet: a decision waiting for you, shared workspaces and agents in one interface" src="docs/media/hero-light.png" width="1440">
 </picture>
 
-New here? Watch the [five-minute silent tour](docs/media/fleet-tour-silent.mp4) or read the [visual guide](docs/workflows.html).
+**[Take the tour →](https://<YOUR-USER>.github.io/defleet/)** A visual guide with a five-minute video and flowcharts for every workflow.
 
 ## Quickstart: your first task in five minutes
 
@@ -86,57 +86,15 @@ Install and authenticate the harness separately. Defleet coordinates existing to
 
 For a custom harness, use **Connect my own tool** and paste its join prompt into that tool. It needs a one-shot prompt command, a way to resume the same session, and access to the hub's MCP tools. Templates support `{prompt}`, `{session}`, `{workdir}` and `{model}`; arguments are passed without a shell. See [custom connectors](docs/configuration.md#custom-connectors) for the exact contract.
 
-## A tour of the work
+## What it can do
 
-Every image below is generated from fictitious demo data by [shoot-readme.ts](scripts/shoot-readme.ts).
+- **Decisions and discussion:** *Needs you* gathers every question across workspaces; **Discuss** opens a thread on one request before you answer.
+- **Tasks you control:** assign work, watch evidence arrive, change status, keep ideas in a private **Backlog**, and **stop** a running agent to ask it something.
+- **Files, usage and knowledge:** attach files to messages, see subscription usage per device, and approve the notes agents propose before any other agent reads them.
+- **One shared codebase:** agents push branches to the hub; you integrate with a fast-forward-only **Integrate** button.
+- **Keyboard first:** `:` opens a command palette, `g` sequences switch tabs, `?` lists every shortcut.
 
-### Answer a decision, or discuss it first
-
-**Needs you** collects pending decisions across workspaces. **Discuss** opens a thread attached to the original request; your final answer goes back to the asking agent.
-
-<picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/discuss-dark.png"><img alt="Discuss a deployment question with its original decision card in view" src="docs/media/discuss-light.png" width="1440"></picture>
-
-### Schedule tasks and keep ideas in Backlog
-
-Assign work, see who holds the lease, inspect evidence and change status. Backlog stays invisible to agents; explicit assignment publishes it privately to that agent. Human overrides and deletion are recorded in history.
-
-<picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/tasks-dark.png"><img alt="Backlog contains ideas waiting for human publication" src="docs/media/tasks-light.png" width="1440"></picture>
-
-### Stop a running turn and ask a question
-
-Open an agent's DM and choose **Stop**. **Stop and send** interrupts its current process group and delivers your question; it preserves the conversation and task claim. Completed actions are not rolled back, so ask the agent to check state before continuing.
-
-<picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/stop-dark.png"><img alt="Stop and ask an agent for its findings before it continues" src="docs/media/stop-light.png" width="1440"></picture>
-
-### Send the files the agent needs
-
-Attach, drop or paste files into the Room or an agent DM. Upload progress and removable chips keep drafts visible; agents receive download instructions for the actual files. Defaults are 25 MiB per human file and ten files per message.
-
-<picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/attachments-dark.png"><img alt="A message composer with a draft and an attached checklist" src="docs/media/attachments-light.png" width="1440"></picture>
-
-### See usage where the work runs
-
-The Usage tab groups available harness usage by device, with observation times and reset windows. These are readings from installed tools, not a billing guarantee; unsupported or unavailable readings are explained.
-
-<picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/usage-dark.png"><img alt="Device usage with session and weekly windows" src="docs/media/usage-light.png" width="1440"></picture>
-
-### Keep knowledge under human review
-
-Agents propose notes with sources and a way to verify them. You review, edit, approve or archive; only approved notes reach agents. Copying a note to the global tier preserves its local version. Notes are context to verify, never trusted instructions.
-
-<picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/knowledge-dark.png"><img alt="Review a proposed recovery note, its verification steps and sources" src="docs/media/knowledge-light.png" width="1440"></picture>
-
-### Share one codebase and integrate deliberately
-
-Agents work in their own worktrees and push their own branches to the hub. **Code → Integrate** advances canonical main only by fast-forward, guarded against concurrent changes. Diverged work must be rebased locally and pushed as a new branch. Storage limits and disk warnings are visible here.
-
-<picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/code-dark.png"><img alt="Canonical main and a task branch ready for human integration" src="docs/media/code-light.png" width="1440"></picture>
-
-### Navigate without reaching for the mouse
-
-Normal-mode `:` opens the command palette; `g` sequences switch tabs, `j`/`k` move through lists, and `?` shows shortcuts. Insert mode keeps text entry ordinary. Edit bindings in Settings; conflicts are refused.
-
-<picture><source media="(prefers-color-scheme: dark)" srcset="docs/media/palette-dark.png"><img alt="Command palette for switching views and running actions" src="docs/media/palette-light.png" width="1440"></picture>
+The [visual guide](https://<YOUR-USER>.github.io/defleet/) walks through each of these with flowcharts and the tour video.
 
 ## Security in plain words
 
@@ -178,4 +136,4 @@ For documentation changes, run the [documentation checks](docs/operations.md#doc
 
 ## License
 
-[MIT](LICENSE). Agent tools, model providers and their subscriptions have their own terms.
+[MIT](LICENSE). Agent tools, model providers and their subscriptions have their own terms. The music in the tour video is credited in [docs/media/CREDITS.md](docs/media/CREDITS.md) and is not MIT-licensed.

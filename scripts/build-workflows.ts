@@ -353,12 +353,13 @@ const outIdx = process.argv.indexOf("--out");
 const out = outIdx > 0 ? process.argv[outIdx + 1] : `${root}docs/workflows.html`;
 
 let html = await Bun.file(`${root}docs/workflows.template.html`).text();
-const videoFile = Bun.file(`${root}docs/media/fleet-tour-silent.mp4`);
-const videoExists = await videoFile.exists();
-const videoVersion = videoExists ? createHash("sha256").update(new Uint8Array(await videoFile.arrayBuffer())).digest("hex").slice(0, 12) : "preview";
-const tour = videoExists
-  ? `<video controls loop preload="metadata" playsinline src="media/fleet-tour-silent.mp4?v=${videoVersion}"><p>Silent tour video: <code>media/fleet-tour-silent.mp4</code></p></video>\n  <p class="note">Current UI, recorded with demo data. Completely silent video (no audio stream). Captions explain each step: onboarding tour and checklist, Needs you with Discuss, Backlog and status overrides, Stop and ask, Knowledge, canonical Git repo with Integrate, and the keyboard palette.</p>`
-  : `<div class="tour-missing"><p>Silent tour video (<code>docs/media/fleet-tour-silent.mp4</code>) will appear here once rendered with <code>bash scripts/record-demo.sh</code>.</p></div>\n  <p class="note">Current UI, recorded with demo data. Completely silent video (no audio stream). Captions explain each step: onboarding tour and checklist, Needs you with Discuss, Backlog and status overrides, Stop and ask, Knowledge, canonical Git repo with Integrate, and the keyboard palette.</p>`;
+const musicFile = Bun.file(`${root}docs/media/fleet-tour-music.mp4`), silentFile = Bun.file(`${root}docs/media/fleet-tour-silent.mp4`);
+const musicExists = await musicFile.exists(), silentExists = await silentFile.exists();
+const main = musicExists ? { name: "fleet-tour-music.mp4", file: musicFile } : silentExists ? { name: "fleet-tour-silent.mp4", file: silentFile } : null;
+const videoVersion = main ? createHash("sha256").update(new Uint8Array(await main.file.arrayBuffer())).digest("hex").slice(0, 12) : "preview";
+const tour = main
+  ? `<video controls loop preload="metadata" playsinline src="media/${main.name}?v=${videoVersion}"><p>Tour video: <code>media/${main.name}</code></p></video>\n  <p class="note">Current UI, recorded with demo data.${musicExists && silentExists ? ' Prefer no sound? <a href="media/fleet-tour-silent.mp4">Watch the silent version</a>.' : ""}${musicExists ? ' Music: see <a href="https://github.com/alperiox/defleet/blob/main/docs/media/CREDITS.md">credits</a>.' : ""}</p>`
+  : `<div class="tour-missing"><p>The tour video will appear here once it is rendered with <code>bash scripts/record-demo.sh</code>.</p></div>`;
 html = html.replace("__TOUR__", tour);
 html = html.replace(/__FLOW:([a-z]+)__/g, (_m, name: string) => {
   const f = FLOWS[name];
@@ -368,4 +369,5 @@ html = html.replace(/__FLOW:([a-z]+)__/g, (_m, name: string) => {
 html = html.replace("</style>\n\n<header", `</style>\n${DEFS}\n<header`);
 if (/__[A-Z]+__/.test(html) || /__FLOW/.test(html)) throw new Error("unreplaced placeholder");
 await Bun.write(out, html);
+if (outIdx < 0) await Bun.write(`${root}docs/index.html`, html);   // GitHub Pages serves docs/index.html as the site home
 console.log(`wrote ${out} (${html.length} bytes)`);
