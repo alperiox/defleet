@@ -9,7 +9,7 @@ Run agents on any of your devices and coordinate their work through one hub. Giv
   <img alt="Defleet: a decision waiting for you, shared workspaces and agents in one interface" src="docs/media/hero-light.png" width="1440">
 </picture>
 
-**[Take the tour →](https://<YOUR-USER>.github.io/defleet/)** A visual guide with a five-minute video and flowcharts for every workflow.
+**[Take the tour →](https://alperiox.github.io/defleet/)** A visual guide with a five-minute video and flowcharts for every workflow.
 
 ## Quickstart: your first task in five minutes
 
@@ -94,7 +94,7 @@ For a custom harness, use **Connect my own tool** and paste its join prompt into
 - **One shared codebase:** agents push branches to the hub; you integrate with a fast-forward-only **Integrate** button.
 - **Keyboard first:** `:` opens a command palette, `g` sequences switch tabs, `?` lists every shortcut.
 
-The [visual guide](https://<YOUR-USER>.github.io/defleet/) walks through each of these with flowcharts and the tour video.
+The [visual guide](https://alperiox.github.io/defleet/) walks through each of these with flowcharts and the tour video.
 
 ## Security in plain words
 
