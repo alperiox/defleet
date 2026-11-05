@@ -1,0 +1,37 @@
+{
+  "name": "defleet",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/server.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "hono": "^4.13.14",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "playwright-core": "^1.64.1",
+    "typescript": "^5.6.0"
+  },
+  "description": "A decentralized fleet of AI agents: a hub for tasks, shared threads, outcome reports and git, driven from a phone or laptop.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alperiox/defleet.git"
+  },
+  "homepage": "https://github.com/alperiox/defleet#readme",
+  "bugs": {
+    "url": "https://github.com/alperiox/defleet/issues"
+  },
+  "keywords": [
+    "agents",
+    "mcp",
+    "multi-agent",
+    "orchestration",
+    "hub",
+    "bun"
+  ]
+}

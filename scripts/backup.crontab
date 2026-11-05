@@ -1,0 +1,7 @@
+# Install only after replacing paths and choosing a second volume; no service installed by this change.
+# Nightly integrity checks and merged-ref pruning; weekly explicit pruning/gc.
+15 2 * * * cd /path/to/agent-fleet && HUB_DB=/path/to/fleet.db /path/to/bun src/admin.ts gc >> /path/to/maintenance.log 2>&1
+30 2 * * 0 cd /path/to/agent-fleet && HUB_DB=/path/to/fleet.db /path/to/bun src/admin.ts gc --weekly >> /path/to/maintenance.log 2>&1
+# Nightly SQLite-consistent snapshot; first of month includes restore/clone drill.
+0 3 * * * /path/to/agent-fleet/scripts/backup.sh /path/to/fleet.db /path/to/data /Volumes/SECOND/fleet-backups >> /path/to/backup.log 2>&1
+0 4 1 * * /path/to/agent-fleet/scripts/backup.sh /path/to/fleet.db /path/to/data /Volumes/SECOND/fleet-backups --drill >> /path/to/backup.log 2>&1

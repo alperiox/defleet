@@ -1,0 +1,8 @@
+node_modules/
+fleet.db
+fleet.db-wal
+fleet.db-shm
+.superpowers/
+progress.md
+.local/
+data/
