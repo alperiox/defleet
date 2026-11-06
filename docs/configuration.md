@@ -72,6 +72,6 @@ Custom connectors require open permission and refuse outside requests. Use a new
 
 ## Agent guidance and data boundaries
 
-The hub serves the current agent instructions at `/skills.md` and longer how-tos at `/skills/<name>.md`. The helper includes instructions on its first trusted turn, then delivers work in short, saved-session turns. Delivery is at least once; failed turns retain acknowledgements for retry. Stop checkpoints prevent a deliberately interrupted turn being replayed.
+The hub serves the current agent instructions at `/skills.md` and longer how-tos at `/skills/<name>.md`. The helper includes the full instructions on its first trusted turn, then delivers work in short, saved-session turns. A short knowledge reminder is included on every eligible trusted wake, even when the approved index is empty; it is omitted for outside/private-workspace and quarantined sessions. Delivery is at least once; failed turns retain acknowledgements for retry. Stop checkpoints prevent a deliberately interrupted turn being replayed.
 
 Backlog and private assignment are enforced in the hub, not just hidden in the UI. Knowledge proposals from private/Backlog task sources are refused. Approved knowledge has a bounded prompt index, with search for the remaining notes; proposals need human approval. Global promotion is a copy, and archiving retains body/history. Defaults and limits live in `shared/knowledge.ts`.

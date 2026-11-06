@@ -8,7 +8,7 @@
 //   [FLEET_WORKDIR=.] [FLEET_MODEL=opencode-go/...] [FLEET_EXTRA_ARGS="--dangerously-skip-permissions"] \
 //   bun run fleet-helper.ts
 
-import { knowledgeBlock, type KnowledgeIndex } from "../shared/knowledge";
+import { KNOWLEDGE_REMINDER, KNOWLEDGE_NUDGE, knowledgeBlock, type KnowledgeIndex } from "../shared/knowledge";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { harnessInfo, type HarnessId } from "../shared/harnesses";
 import { spawnSync, spawn } from "node:child_process";
@@ -34,6 +34,7 @@ export interface HelperConfig {
   /** Learned from the hub on each pull: who this agent is. */
   codebases?:{project:string;main:string}[];
   project?:string;branch?:string;base?:string;
+  knowledgeAllowed?:boolean;
   agentName?: string; workspaceName?: string; instructions?: string;
   /** custom only: the command that runs one turn, and (optionally) the one that continues the session. */
   runCmd: string; resumeCmd: string;
@@ -41,7 +42,7 @@ export interface HelperConfig {
 export type Mode = "trusted" | "quarantine";
 export interface Ack { msg: number; task: number; answers: string[]; interrupted?: { type: "message" | "task"; id: string; seq: number }[] }
 export interface Interruption { ack?: Ack; note: string; mode: Mode; knowledgeVersion?: string }
-export interface Pulled { codebases?:{project:string;main:string}[]; knowledge?: KnowledgeIndex; items: any[]; ack: Ack; /** who the hub says this agent is, with its standing instructions */ self?: { name: string; workspace: string; instructions?: string } }
+export interface Pulled { codebases?:{project:string;main:string}[]; knowledge?: KnowledgeIndex; items: any[]; ack: Ack; /** who the hub says this agent is, with its standing instructions */ self?: { name: string; workspace: string; instructions?: string; knowledgeAllowed?:boolean } }
 export interface Command { argv: string[]; env: Record<string, string>; cwd: string; /** the caller needs this run's output (to learn a session id, or the reply) */ capture?: boolean }
 export interface HelperIO {
   pull(ack?: Ack): Promise<Pulled>;
@@ -116,9 +117,10 @@ export function buildPrompt(items: any[], cfg: HelperConfig, skills: string | nu
     ...(cfg.project ? [`Project ${cfg.project}; canonical hub repo ${cleanGitUrl(cfg.hubUrl,cfg.project)}; worktree ${cfg.workdir}; branch ${cfg.branch}; base main@${cfg.base}. Work in a worktree of the hub repo and push your branch to the hub.`, ""] : []),
     ...(cfg.instructions ? [`Standing instructions from your human (they apply to everything you do here, on top of the fleet rules below):\n${cfg.instructions}`, ""] : []),
     skills ? `You are an agent on a shared fleet. These are your instructions:\n\n${skills}\n\n---\nNow handle these items from the hub:` : "New items from the fleet hub:",
+    ...(cfg.knowledgeAllowed === true ? [KNOWLEDGE_REMINDER] : []),
     ...(knowledge ? [knowledgeBlock(knowledge.entries, knowledge.total).block, ""] : []),
     ...items.map((item) => {
-      const text = describe(item);
+      const text = describe(item) + (item.type === "task" && item.task.status === "done" && cfg.knowledgeAllowed === true ? "\n  " + KNOWLEDGE_NUDGE : "");
       const files = item.type === "message" ? item.message.attachments ?? [] : [];
       if (!files.length) return text;
       const sh = (v: string) => "\'" + v.replace(/\'/g, "\'\\\'\'") + "\'";
@@ -531,7 +533,7 @@ export async function processPending(cfg: HelperConfig, io: HelperIO): Promise<"
   const save = (value: Interruption | null) => { interruption = value; io.state.setInterruption?.(value); };
   let cur = await io.pull(interruption?.ack);
   if (interruption?.ack) save({ ...interruption, ack: undefined });
-  const learn = () => { cfg.codebases=cur.codebases??[]; if (cur.self) { cfg.agentName = cur.self.name; cfg.workspaceName = cur.self.workspace; cfg.instructions = cur.self.instructions ?? ""; } };
+  const learn = () => { cfg.knowledgeAllowed=cur.self?.knowledgeAllowed??!!cur.knowledge; cfg.codebases=cur.codebases??[]; if (cur.self) { cfg.agentName = cur.self.name; cfg.workspaceName = cur.self.workspace; cfg.instructions = cur.self.instructions ?? ""; } };
   learn();
   let seenKnowledge = interruption?.knowledgeVersion ?? io.state.knowledgeVersion?.() ?? "";
   if (interruption?.knowledgeVersion) io.state.setKnowledgeVersion?.(seenKnowledge);

@@ -1,3 +1,4 @@
+import { KNOWLEDGE_NUDGE } from "../shared/knowledge";
 import { createSchedule, updateSchedule, deleteSchedule, tickSchedules, schedulesView, type ScheduleInput, type SchedulePatch } from "./schedules";
 import { mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import type { KnowledgeContext, KnowledgeInput } from "./knowledge";
@@ -550,7 +551,9 @@ export class Hub {
     return { ok: true, key: task.key, cleanupPending: !!this.store.deletedTasks().find((d) => d.taskId === task.id)?.pendingFiles.length };
   }
 
-  complete(agent: Agent, taskId: string): Task {
+  canUseKnowledge(agent:Agent):boolean { return this.store.knowledgeCanUse(this.knowledgeContext(agent)); }
+
+  complete(agent: Agent, taskId: string): Task & {knowledgeNudge?:string} {
     const task = this.owned(agent, taskId);
     if (this.store.evidenceFor(task.id).length === 0) throw new Error("evidence required");
     const open = this.store.childrenOf(task.id).filter((c) => c.status !== "done");
@@ -564,7 +567,28 @@ export class Hub {
     this.event(task.id, agent.id, "completed", "completed");
     this.touch(agent, "complete_task", task.key);
     this.notify();
-    return this.store.getTask(task.id)!;
+    return { ...this.store.getTask(task.id)!, ...(this.canUseKnowledge(agent)?{knowledgeNudge:KNOWLEDGE_NUDGE}:{}) };
+  }
+
+  knowledgeSuggestion(taskRef:string):{agentId?:string;agent?:string;reason?:string}{
+    const task=this.task(taskRef);
+    if(task.status!=="done")return{reason:"Finish this task before suggesting notes."};
+    if(task.visibleToAgent)return{reason:"Notes from privately assigned tasks cannot be proposed."};
+    if(task.tainted)return{reason:"Outside or quarantined task content cannot seed team knowledge."};
+    const history=this.store.taskEvents(task.id).filter(e=>["claimed","accepted","completed","lease-expired"].includes(e.kind)&&e.actor!==HUMAN);
+    const holder=task.claimedBy&&task.claimedBy!==HUMAN?task.claimedBy:history.at(-1)?.actor;
+    if(!holder)return{reason:"No agent held this task."};
+    const agent=this.store.listAgents().find(a=>a.id===holder&&(a.expiresAt===null||a.expiresAt>Date.now()));
+    if(!agent||!this.canUseKnowledge(agent)||!this.canAccessTask(agent,task))return{reason:"The previous holder is unavailable or no longer has access to this task and team knowledge."};
+    return{agentId:agent.id,agent:agent.name};
+  }
+
+  suggestKnowledge(taskRef:string){
+    const task=this.task(taskRef),target=this.knowledgeSuggestion(task.id);
+    if(target.reason)throw Error(target.reason);
+    const message=this.humanDm(target.agentId!,`Suggest reusable setup, environment or gotcha notes from your finished work on ${task.key}: ${task.title} (project ${task.project}). Call propose_knowledge with a verification line and public sources; suggestions need human approval. Do not invent a note if nothing is reusable, and do not include secrets or private task/message material.`);
+    this.event(task.id,HUMAN,"knowledge-suggestion",`Asked ${target.agent} to suggest reusable notes`);
+    this.notify();return{ok:true,agent:target.agent,messageId:message.id};
   }
 
   /** Posts a message, optionally with files the agent already uploaded. Naming a task it holds also files them under that task. */

@@ -39,6 +39,9 @@ export function mountApi(app: Hono, hub: Hub, store: Store, humanToken: string, 
     c.body(await Bun.file(new URL("../ui/keys.js", import.meta.url)).text(), 200, { "content-type": "text/javascript; charset=utf-8" }),
   );
   // The palette ranking, command parser and keymap storage are shared with tests the same way.
+  app.get("/workspaces.js", async (c) =>
+    c.body(await Bun.file(new URL("../ui/workspaces.js", import.meta.url)).text(), 200, { "content-type": "text/javascript; charset=utf-8" }),
+  );
   app.get("/palette.js", async (c) =>
     c.body(await Bun.file(new URL("../ui/palette.js", import.meta.url)).text(), 200, { "content-type": "text/javascript; charset=utf-8" }),
   );
@@ -96,7 +99,7 @@ export function mountApi(app: Hono, hub: Hub, store: Store, humanToken: string, 
       roomReplies: store.listWorkspaces().flatMap((w) => { const reply = hub.roomReplyWindow(w.id); return reply ? [reply] : []; }),
       agents: store.listAgents().map((a) => ({ ...a, external: hub.isExternal(a), grants: store.projectsOf(a.id), activity: hub.activityOf(a.id) })),
       deletedTasks: store.deletedTasks(),
-      tasks: store.listTasks().map((t) => ({ ...t, lease: hub.leaseOf(t), workspaceId: store.projectWorkspace(t.project) ?? "default" })),
+      tasks: store.listTasks().map((t) => ({ ...t, knowledgeSuggestion: t.status === "done" ? hub.knowledgeSuggestion(t.id) : null, lease: hub.leaseOf(t), workspaceId: store.projectWorkspace(t.project) ?? "default" })),
       requests: store.openRequests(),
       retired: store.listRetiredAgents(),
       workspaces: store.listWorkspaces(),
@@ -294,6 +297,8 @@ export function mountApi(app: Hono, hub: Hub, store: Store, humanToken: string, 
       return c.json({ error: (e as Error).message }, 400);
     }
   });
+
+  app.post("/api/tasks/:id/suggest-knowledge",c=>{try{return c.json(hub.suggestKnowledge(c.req.param("id")));}catch(e){return c.json({error:(e as Error).message},409);}});
 
   app.post("/api/tasks/:id/status", async (c) => {
     const body = await c.req.json().catch(() => null);

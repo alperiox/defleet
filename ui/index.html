@@ -320,6 +320,22 @@
   #login p { color:var(--muted); margin:0 0 16px; }
   #login .send { width:100%; margin-top:12px; }
 
+  /* Workspaces with activity you have not opened yet: visible without opening the select box. */
+  .ws-fresh { display:flex; flex-wrap:wrap; gap:4px; }
+  .ws-fresh button { border:2px solid var(--line); border-left-width:6px; background:var(--panel); color:var(--fg); padding:4px 8px; min-height:32px; font:700 11px var(--mono); letter-spacing:.04em; text-align:left; }
+  .ws-fresh button:hover { background:var(--inv-bg); color:var(--inv-fg); }
+  @media (max-width:820px) { .ws-fresh button { min-height:44px; } }
+
+  /* Cross-workspace notification: one line, a name, and one button to go there. */
+  .ws-toast { position:fixed; z-index:95; top:16px; right:16px; width:min(400px, calc(100% - 32px)); display:flex; gap:10px; align-items:flex-start; border:2px solid var(--line); background:var(--panel); color:var(--fg); padding:12px 14px; box-shadow:6px 6px 0 var(--s4); }
+  .ws-toast-copy { flex:1; min-width:0; overflow-wrap:anywhere; }
+  .ws-toast-title { font:700 12px var(--mono); letter-spacing:.04em; }
+  .ws-toast button { flex:none; }
+  .ws-toast .ghost { min-height:44px; }
+  .ws-toast-close { min-width:44px; min-height:44px; border:2px solid var(--line); background:var(--panel); font:700 16px var(--mono); }
+  .ws-toast-close:hover { background:var(--inv-bg); color:var(--inv-fg); }
+  @media (max-width:820px) { .ws-toast { top:auto; bottom:16px; } }   /* a snackbar: never covers the workspace switcher */
+
   /* Keyboard: the selected row reads as a hard outline plus a bar, so it is clear without colour. */
   .row-sel { outline:4px solid var(--fg); outline-offset:2px; background:var(--s2); }
   .card.req.row-sel { outline-offset:-4px; box-shadow:6px 6px 0 var(--s7), inset 10px 0 0 var(--fg); }
@@ -467,6 +483,7 @@
     <div class="wsbar">
       <label class="sm" for="wsSelect">Workspace</label>
       <select id="wsSelect"></select>
+      <div class="ws-fresh" id="wsFresh" hidden></div>
       <div class="wsnew" id="wsNewBox" hidden>
         <input type="text" id="wsNewName" placeholder="Name of the new workspace" maxlength="60">
         <button class="send" id="wsCreate">Create</button>
@@ -588,11 +605,17 @@
   <button type="button" id="error-toast-close" aria-label="Dismiss error">×</button>
 </div>
 <div class="keyhint" id="keyhint" role="status" aria-live="polite" hidden></div>
+<div class="ws-toast" id="ws-toast" role="status" aria-live="polite" hidden>
+  <div class="ws-toast-copy"><div class="ws-toast-title" id="ws-toast-title"></div><div class="sm" id="ws-toast-more"></div></div>
+  <button type="button" class="ghost" id="ws-toast-open">Open</button>
+  <button type="button" class="ws-toast-close" id="ws-toast-close" aria-label="Dismiss notification">×</button>
+</div>
 <script type="module">
 import { parseMarkdown, safeHref } from "/markdown.js";
 import { mentionAt, suggestAgents, applyMention } from "/mention.js";
 import { HARNESSES } from "/harnesses.js";
 import { DEFAULT_KEYMAP, buildMap, keyToken, isInsertTarget, reduceKey, hintText, stepIndex, rebind } from "/keys.js";
+import { routeProblem, workspaceOfUpdate, splitUpdates, beepDue, workspaceLabel, toastLine, toastMore } from "/workspaces.js";
 import { paletteItems, parseCommand, rankItems, loadKeymap, saveKeymap, overridesFor } from "/palette.js";
 import { TOUR_STEPS, computeChecklist, shouldAutoOpenTour, TOUR_DONE_KEY, CHECKLIST_DISMISSED_KEY } from "/onboarding.js";
 const KEY = "fleet-human-token", SEEN = "fleet-seen";
@@ -736,7 +759,43 @@ function scopeState(r) {
     agentDms: r.agentDms.filter((m) => m.thread.split(":").slice(1).every((x) => ids.has(x))),
   };
 }
-const setWorkspace = (id) => { wsId = id; try { localStorage.setItem(WS_KEY, id); } catch {} if (raw) { state = scopeState(raw); render(); } };
+// Unsent text belongs to the conversation it was typed in, never to whatever view replaces it.
+const chatDrafts = new Map();
+const wsUnread = new Map();          // workspace id -> updates that arrived while another workspace was active
+let lastBeepAt = 0;
+
+function saveDraft() {
+  if (!currentView || $("composer").hidden) return;
+  const v = $("compose").value;
+  if (v.trim()) chatDrafts.set(currentView, v); else chatDrafts.delete(currentView);
+}
+// What the active workspace can show, for checking whether the current hash still means something.
+function routeScope() {
+  return {
+    agents: state.agents.map((a) => a.name),
+    tasks: state.tasks.flatMap((t) => [t.key, t.id]).filter(Boolean),
+    chats: chatThreads().map((c) => c.route),
+  };
+}
+const wsFreshTotal = () => [...wsUnread.entries()].filter(([id]) => id !== wsId).reduce((n, [, v]) => n + v, 0);
+function updateTitle() {
+  const requests = state ? state.requests.length : 0, total = requests + unread + wsFreshTotal();
+  document.title = (total ? "(" + total + ") " : "") + "Fleet";
+}
+
+const setWorkspace = (id) => {
+  if (id === wsId) return;
+  saveDraft();
+  wsId = id; try { localStorage.setItem(WS_KEY, id); } catch {}
+  wsUnread.delete(id);               // opening a workspace clears its "new" count
+  if (!raw) return;
+  state = scopeState(raw);
+  // Redirect if the open route belonged to the old workspace, then draw once, now: the hashchange event may be
+  // coalesced with a following navigation (the toast switches workspace and opens an item in one click).
+  if (routeProblem(route(), routeScope())) location.hash = "#/inbox";
+  render();
+  updateTitle();
+};
 try { seen = JSON.parse(localStorage.getItem(SEEN) || "{}"); } catch {}
 const saveSeen = () => { try { localStorage.setItem(SEEN, JSON.stringify(seen)); } catch {} };
 let taskFilter = "all";
@@ -994,14 +1053,24 @@ $("own-go").addEventListener("click", async () => {
 
 function renderWorkspaces() {
   const sel = $("wsSelect");
-  // Each workspace shows how many requests are waiting on you in it, so nothing hides behind the switcher.
+  // Each workspace shows how many requests are waiting on you in it, so nothing hides behind the switcher. Updates that
+  // arrived while you were in another workspace are counted separately, and cleared when you open that workspace.
   const waiting = {};
   for (const q of raw.requests) { const a = raw.agents.find((x) => x.id === q.fromAgent); const w = a ? a.workspaceId : "default"; waiting[w] = (waiting[w] || 0) + 1; }
-  const key = raw.workspaces.map((w) => w.id + w.name + (waiting[w.id] || 0)).join("|") + "|" + wsId;
-  if (sel.dataset.key === key) return;
+  const key = raw.workspaces.map((w) => w.id + w.name + (waiting[w.id] || 0) + (wsUnread.get(w.id) || 0)).join("|") + "|" + wsId;
+  // The option list may be unchanged while the selected workspace is not: keep the control showing what is active.
+  if (sel.dataset.key === key) { sel.value = wsId; return; }
   sel.dataset.key = key;
-  sel.replaceChildren(...raw.workspaces.map((w) => el("option", { value: w.id }, w.name + (waiting[w.id] ? "  (" + waiting[w.id] + " waiting)" : ""))), el("option", { value: "__new__" }, "＋ New workspace…"));
+  sel.replaceChildren(...raw.workspaces.map((w) => el("option", { value: w.id }, workspaceLabel(w.name, waiting[w.id] || 0, wsUnread.get(w.id) || 0))), el("option", { value: "__new__" }, "＋ New workspace…"));
   sel.value = wsId;
+  // The same count, as buttons: a closed select box only ever shows the active workspace.
+  const fresh = raw.workspaces.filter((w) => w.id !== wsId && (wsUnread.get(w.id) || 0) > 0);
+  $("wsFresh").hidden = fresh.length === 0;
+  $("wsFresh").replaceChildren(...fresh.map((w) => {
+    const b = el("button", { type: "button", title: "Open " + w.name }, workspaceLabel(w.name, 0, wsUnread.get(w.id) || 0));
+    b.addEventListener("click", () => setWorkspace(w.id));
+    return b;
+  }));
 }
 $("wsSelect").addEventListener("change", () => {
   const v = $("wsSelect").value;
@@ -1017,6 +1086,8 @@ $("wsCreate").addEventListener("click", async () => {
   raw = { ...raw, workspaces: [...raw.workspaces, body] }; setWorkspace(body.id);
 });
 $("wsNewName").addEventListener("keydown", (e) => { if (e.key === "Enter") $("wsCreate").click(); });
+$("ws-toast-open").addEventListener("click", () => openUpdate(wsToastItems[wsToastItems.length - 1]));
+$("ws-toast-close").addEventListener("click", hideWsToast);
 
 function renderNav() {
   const r = route(), nav = $("nav");
@@ -1031,7 +1102,7 @@ function renderNav() {
     item("Needs you", "#/inbox", r.view === "inbox", n ? el("span", { class: "badge" }, String(n)) : null),
     item("Room", "#/room", r.view === "room", roomUnread && r.view !== "room" ? el("span", { class: "unread" }) : null),
     item("Tasks", "#/tasks", r.view === "tasks"),
-    item("Knowledge", "#/knowledge", r.view === "knowledge", (() => { const n = raw.knowledgeMeta?.find((m) => m.workspaceId === wsId)?.proposed || 0; return n ? el("span", { class: "badge" }, String(n)) : null; })()),
+    item("Knowledge", "#/knowledge", r.view === "knowledge", (() => { const n = raw.knowledgeMeta?.find((m) => m.workspaceId === wsId)?.proposed || 0; return n ? el("span", { class: "badge", title: "Proposed notes awaiting approval", "aria-label": "Proposed notes: " + n }, "Proposed " + n) : null; })()),
     item("Code", "#/code", r.view === "code"),
     item("Team", "#/team", r.view === "team"),
     item("Access", "#/access", r.view === "access"),
@@ -1808,6 +1879,22 @@ function updateTaskControls(c) {
   c.hint.textContent = c.task.status === "backlog" ? "Backlog: only you can see this task. Assign it to open it privately for one agent, or explicitly change its status." : c.task.visibleToAgent ? "Private assignment: visible only to you and " + agentNameOf(c.task.visibleToAgent) + "." : "You can override status here, including completion without agent evidence checks. Backlog hides a task from agents.";
 }
 
+const knowledgeSuggestControls=new Map();
+function suggestKnowledgeControl(task){
+ if(task.status!=="done")return null;
+ let control=knowledgeSuggestControls.get(task.id);
+ if(!control){
+  const button=el("button",{class:"ghost","data-suggest-knowledge":task.id,style:"min-height:44px"},"Suggest notes from this task"),status=el("div",{class:"sm",role:"status"}),hint=el("p",{class:"sm"});
+  const root=el("section",{class:"card",style:"margin:12px 0;overflow-wrap:anywhere"},el("div",{class:"sec",style:"margin-top:0"},"Keep a reusable lesson"),hint,button,status,el("a",{class:"link",href:"#/knowledge",style:"display:inline-block;min-height:44px;padding:12px 0"},"Review Knowledge"));
+  control={root,button,status,hint,task,pending:false};knowledgeSuggestControls.set(task.id,control);
+  button.addEventListener("click",async()=>{if(control.pending)return;control.pending=true;button.disabled=true;status.textContent="";try{const r=await api("/api/tasks/"+control.task.id+"/suggest-knowledge",{method:"POST"});const result=await r.json();if(!r.ok)throw Error(result.error||"Could not ask for suggestions");status.textContent="Asked "+result.agent+" to propose notes. Review them in Knowledge before approving.";}catch(e){status.textContent=e.message;}finally{control.pending=false;button.disabled=!!control.task.knowledgeSuggestion?.reason;}});
+ }
+ control.task=task;const target=task.knowledgeSuggestion;
+ control.button.disabled=control.pending||!target||!!target.reason;
+ control.hint.textContent=target?.reason||(target?.agent?"Ask "+target.agent+" to propose useful setup, environment or gotcha notes from this work. Nothing is created or approved automatically.":"No eligible previous holder is available.");
+ return control.root;
+}
+
 function renderTaskPage(ref) {
   const t = state.tasks.find((x) => x.key === ref || x.id === ref);
   const box = $("v-task");
@@ -1822,7 +1909,7 @@ function renderTaskPage(ref) {
   const kids = state.tasks.filter((x) => x.parentId === t.id);
   const ev = state.evidence.filter((e) => e.taskId === t.id);
   const events = state.taskEvents.filter((e) => e.taskId === t.id);
-  const part = [back, taskControls(t), scheduleControl(t),
+  const part = [back, suggestKnowledgeControl(t), taskControls(t), scheduleControl(t),
     outcomeSection(t, state.artifacts.filter((a) => a.taskId === t.id)),
     el("div", { class: "facts" },
       fact("Status", el("span", { class: "pill " + t.status }, t.status.replace("_", " "))),
@@ -1949,7 +2036,7 @@ function renderKnowledgeList(view) {
   view.list.replaceChildren(...(rows.length ? rows.map((entry) => {
     const button = el("button", { class: "kb-entry" + (view.selected?.entry?.id === entry.id ? " on" : ""), "data-kb-id": entry.id }, el("strong", {}, entry.title), el("span", { class: "sm" }, entry.kind + " · " + entry.scope + (entry.project ? " · " + entry.project : "") + (entry.stale ? " · unverified / needs a check" : " · verified")));
     button.addEventListener("click", () => selectKnowledge(view, entry)); return button;
-  }) : [emptyState("No " + view.status + " notes in this workspace", "Knowledge stores verified facts, how-tos, and gotchas shared across your agents.", "Add a note", () => selectKnowledge(view, null))]));
+  }) : [emptyState("No " + view.status + " notes in this workspace", "Agents search approved notes before rediscovering setup and propose reusable lessons. Proposals appear here for your review; approve them before other agents can read them. To ask for ideas, choose Suggest notes from this task on a finished task. You can also write an approved note yourself.", "Add a note", () => selectKnowledge(view, null))]));
 }
 function selectKnowledge(view, entry) {
   const title = el("input", { id: "kb-title", maxlength: "120", "aria-label": "Knowledge title" });
@@ -2818,6 +2905,13 @@ document.addEventListener("click", (e) => {
 let currentView = "";
 function render() {
   if (!state) return;
+  // A route can stop existing when the workspace changes or an agent is removed or moved. Never render a chat for a
+  // hidden agent or a task from another workspace: keep the typed text as a draft and show Needs you instead.
+  saveDraft();
+  if (routeProblem(route(), routeScope())) {
+    if (location.hash !== "#/inbox") { go("#/inbox"); return; }
+    return;
+  }
   const scheduleFocus=document.activeElement?.closest?.(".schedule-control")?document.activeElement:null;
   const scheduleSelection=scheduleFocus&&typeof scheduleFocus.selectionStart==="number"?[scheduleFocus.selectionStart,scheduleFocus.selectionEnd]:null;
   names = Object.fromEntries([...raw.retired.map((a) => [a.id, a.name + " (removed)"]), ...raw.agents.map((a) => [a.id, a.name])]); names.human = "you";
@@ -2825,7 +2919,7 @@ function render() {
   const r = route();
   syncRequests();
   const n = state.requests.length;
-  document.title = ((n + unread) ? "(" + (n + unread) + ") " : "") + "Fleet";
+  updateTitle();
   $("mbadge").hidden = !n; $("mbadge").textContent = String(n);
 
   for (const v of ["inbox", "thread", "tasks", "activity", "task", "chat", "code", "team", "access", "devices", "usage", "settings", "knowledge"]) $("v-" + v).hidden = true;
@@ -2880,6 +2974,8 @@ function render() {
     $("title").textContent = isRoom ? "Room" : t.agent.name;
     $("meta").textContent = isRoom ? "reply within 20 min without @ · @name or @all anytime" : t.agent.device + " · " + statusText(t.agent);
     $("v-thread").hidden = false; composer.hidden = false;
+    const thisThread = r.view + "/" + r.arg + (r.discuss ? "?" + r.discuss : "");
+    if (currentView !== thisThread) { compose.value = chatDrafts.get(thisThread) ?? ""; autosize(); }
     compose.placeholder = isRoom ? "Message the room" : "Message " + t.agent.name;
     renderDiscussHeader(r.view === "dm" ? r.discuss : null);
     stick = renderMessages($("thread-msgs"), t.msgs, isRoom);
@@ -2887,6 +2983,8 @@ function render() {
     if (top !== (seen[t.key] || 0) && !document.hidden) { seen[t.key] = top; saveSeen(); }
     if (r.view === "dm" && r.discuss) compose.focus();
   }
+  // Outside a conversation the composer holds nothing: a draft lives in chatDrafts, keyed by its own thread.
+  if (composer.hidden) { $("compose").value = ""; autosize(); }
   const viewKey = r.view + "/" + r.arg + (r.discuss ? "?" + r.discuss : "");
   if (currentView !== viewKey) {
     currentView = viewKey;
@@ -2978,6 +3076,7 @@ async function send() {
   d.sending = false;
   if (res.ok) {
     d.files = [];
+    chatDrafts.delete(r.view + "/" + r.arg + (r.discuss ? "?" + r.discuss : ""));
     if (attachmentDraft() === d && $("compose").value === originalText) { $("compose").value = ""; autosize(); updateRoomReplyHint(); }
     await refresh();
   }
@@ -3000,32 +3099,81 @@ function beep() {
   } catch {}
 }
 function updates() {
-  const out = [];
-  for (const r of raw.requests || []) if (!known.has(r.id)) { known.add(r.id); out.push({ title: (names[r.fromAgent] || "An agent") + " needs you", body: r.text, hash: "#/inbox" }); }
+  const out = [], ctx = { agentWorkspace: Object.fromEntries((raw.agents || []).map((a) => [a.id, a.workspaceId])) };
+  for (const r of raw.requests || []) if (!known.has(r.id)) {
+    known.add(r.id);
+    out.push({ kind: "request", fromAgent: r.fromAgent, title: (names[r.fromAgent] || "An agent") + " needs you", body: r.text, hash: "#/inbox", workspaceId: workspaceOfUpdate({ kind: "request", fromAgent: r.fromAgent }, ctx) });
+  }
   for (const m of [...(raw.dms || []), ...(raw.room || [])]) {
     const key = m.thread + "#" + m.id; if (seenMsg.has(key)) continue; seenMsg.add(key);
     if (m.from === "human" || !names[m.from]) continue;
     const dm = m.thread.startsWith("dm:");
-    out.push({ title: names[m.from] + (dm ? " replied" : " in the room"), body: m.text || "(attachment)", hash: dm ? "#/dm/" + encodeURIComponent(names[m.from]) : "#/room" });
+    out.push({
+      kind: "message", thread: m.thread, workspace: m.workspace,
+      title: names[m.from] + (dm ? " replied" : " in the room"), body: m.text || "(attachment)",
+      hash: dm ? "#/dm/" + encodeURIComponent(names[m.from]) : "#/room",
+      workspaceId: workspaceOfUpdate({ kind: "message", thread: m.thread, workspace: m.workspace }, ctx),
+    });
   }
   for (const t of raw.tasks || []) {
     const prev = taskStatus[t.id]; taskStatus[t.id] = t.status;
     if (prev === undefined || prev === t.status) continue;
-    if (t.status === "done" || t.status === "blocked") out.push({ title: t.key + (t.status === "done" ? " is done" : " is blocked"), body: t.title, hash: "#/task/" + t.key });
+    if (t.status === "done" || t.status === "blocked") out.push({ kind: "task", taskWorkspace: t.workspaceId, title: t.key + (t.status === "done" ? " is done" : " is blocked"), body: t.title, hash: "#/task/" + t.key, workspaceId: workspaceOfUpdate({ kind: "task", taskWorkspace: t.workspaceId }, ctx) });
   }
   return out;
+}
+
+// One toast at a time: the newest cross-workspace update, how many others came with it, and where to go.
+let wsToastItems = [], wsToastTimer = 0;
+function showWsToast(items) {
+  wsToastItems.push(...items);
+  const latest = items[items.length - 1];
+  $("ws-toast-title").textContent = toastLine(wsName(latest.workspaceId), latest);
+  $("ws-toast-more").textContent = toastMore(wsToastItems.length);
+  $("ws-toast").hidden = false;
+  clearTimeout(wsToastTimer);
+  wsToastTimer = setTimeout(hideWsToast, 12000);
+}
+function hideWsToast() {
+  clearTimeout(wsToastTimer);
+  wsToastItems = [];
+  $("ws-toast").hidden = true;
+}
+function openUpdate(u) {
+  if (!u) return;
+  if (u.workspaceId && u.workspaceId !== wsId) setWorkspace(u.workspaceId);   // the hash alone is not enough
+  if (u.hash && location.hash !== u.hash) location.hash = u.hash;
+  hideWsToast();
+}
+function notifyBrowser(items) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  for (const u of items.slice(0, 3)) {
+    const name = u.workspaceId && u.workspaceId !== wsId ? wsName(u.workspaceId) + ": " : "";
+    const n = new Notification(name + u.title, { body: String(u.body || "").slice(0, 140) });
+    n.onclick = () => { window.focus(); openUpdate(u); n.close(); };
+  }
 }
 function maybeNotify() {
   const fresh = updates();
   if (first) { first = false; return; }
-  if (!fresh.length || !noteOn()) return;
-  if (!document.hidden) return;
-  unread += fresh.length; beep();
-  if ("Notification" in window && Notification.permission === "granted")
-    for (const u of fresh.slice(0, 3)) {
-      const n = new Notification(u.title, { body: u.body.slice(0, 140) });
-      n.onclick = () => { window.focus(); location.hash = u.hash; n.close(); };
-    }
+  if (!fresh.length) return;
+  const { other, active } = splitUpdates(fresh, wsId), now = Date.now();
+  if (other.length) {
+    // Another workspace is always worth a sound and a toast, even with this tab in front.
+    for (const u of other) wsUnread.set(u.workspaceId, (wsUnread.get(u.workspaceId) || 0) + 1);
+    if (noteOn() && beepDue(lastBeepAt, now)) { lastBeepAt = now; beep(); }
+    showWsToast(other);
+    notifyBrowser(other);
+    renderWorkspaces();
+    updateTitle();
+  }
+  if (document.hidden && active.length) {
+    // The active workspace keeps the old rule: only when the tab is hidden.
+    unread += active.length;
+    if (noteOn() && beepDue(lastBeepAt, now)) { lastBeepAt = now; beep(); }
+    notifyBrowser(active);
+    updateTitle();
+  }
 }
 function noteLabel() {
   if (!("Notification" in window) || !window.isSecureContext) return "Alerts: sound + title only (needs https for pop-ups)";

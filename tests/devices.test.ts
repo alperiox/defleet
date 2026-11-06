@@ -249,7 +249,7 @@ test("an agent's wake carries who it is, so an agent that resumed an old convers
   const a = store.addAgent({ name: "who-am-i", owner: "alper", device: "d", skills: [] });
   const res = await fetch(`${base}/agent/pull`, { method: "POST", headers: { Authorization: `Bearer ${a.token}`, "content-type": "application/json" }, body: "{}" });
   const body: any = await res.json();
-  expect(body.self).toEqual({ name: "who-am-i", workspace: "Default", instructions: "" });
+  expect(body.self).toEqual({ name: "who-am-i", workspace: "Default", instructions: "", knowledgeAllowed: true });
 });
 
 test("refusing an agent that does not hold a task says who it is, who holds it, and how to get it", () => {

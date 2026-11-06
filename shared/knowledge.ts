@@ -1,3 +1,5 @@
+export const KNOWLEDGE_REMINDER = "Knowledge: search_knowledge before rediscovering setup; propose_knowledge for reusable lessons (human approves).";
+export const KNOWLEDGE_NUDGE = "If you learned something reusable (setup, environment, gotcha), call propose_knowledge before moving on.";
 export const KNOWLEDGE_POLICY = {
   autoApprove: false, promotion: "copy", maxTitles: 24, indexTokens: 400,
   staleDays: 90, environmentStaleDays: 30, maxTitle: 120, maxBodyBytes: 8192,

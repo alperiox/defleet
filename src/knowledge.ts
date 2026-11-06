@@ -145,6 +145,7 @@ export function knowledgeStore(db: Database, enableFts = true) {
   })();
  };
  return {
+  knowledgeCanUse: (ctx:KnowledgeContext)=>{try{guard(ctx);return true;}catch{return false;}},
   knowledgeSearchMode: mode, knowledgeCreate: create, knowledgeSearch: search, knowledgeIndex: index,
   knowledgeGet(ctx: KnowledgeContext, id: string) { return dto(ctx, raw(ctx, id)); },
   knowledgeChange: change,

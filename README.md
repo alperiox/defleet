@@ -90,7 +90,7 @@ For a custom harness, use **Connect my own tool** and paste its join prompt into
 
 - **Decisions and discussion:** *Needs you* gathers every question across workspaces; **Discuss** opens a thread on one request before you answer.
 - **Tasks you control:** assign work, watch evidence arrive, change status, keep ideas in a private **Backlog**, and **stop** a running agent to ask it something.
-- **Files, usage and knowledge:** attach files to messages, see subscription usage per device, and approve the notes agents propose before any other agent reads them.
+- **Files, usage and knowledge:** attach files to messages, see subscription usage per device, and approve the notes agents propose before any other agent reads them. On a finished task, **Suggest notes from this task** asks its previous holder for reusable lessons; the Knowledge **Proposed** badge shows what needs review. See [building knowledge](docs/operations.md#build-the-knowledge-base-from-finished-work).
 - **One shared codebase:** agents push branches to the hub; you integrate with a fast-forward-only **Integrate** button.
 - **Keyboard first:** `:` opens a command palette, `g` sequences switch tabs, `?` lists every shortcut.
 

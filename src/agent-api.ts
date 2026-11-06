@@ -70,7 +70,7 @@ export function mountAgentApi(app: Hono, hub: Hub, store: Store, publicUrl = "")
       if(!/^[a-z0-9][a-z0-9._-]{0,60}$/.test(project)||!hub.canAccessRepo(agent,project))continue;
       try{const main=await gitRun(`${hub.dataDir}/repos/${project}.git`,"rev-parse","--verify","refs/heads/main");if(/^[a-f0-9]{40}$/.test(main))codebases.push({project,main});}catch{}
     }
-    return c.json({ ...pulled, ...(codebases.length?{codebases}:{}), ...(knowledge ? { knowledge } : {}), self: { name: agent.name, workspace: hub.workspaceNameOf(agent), instructions: agent.instructions } });
+    return c.json({ ...pulled, ...(codebases.length?{codebases}:{}), ...(knowledge ? { knowledge } : {}), self: { name: agent.name, workspace: hub.workspaceNameOf(agent), instructions: agent.instructions, knowledgeAllowed: !!knowledge } });
   });
 
   // The helper holds this open. "wake" means there is work to pull; it carries no content.
