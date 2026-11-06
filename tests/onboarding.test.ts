@@ -8,10 +8,10 @@ import {
 } from "../ui/onboarding.js";
 
 describe("onboarding tour steps", () => {
-  test("has 5 distinct steps with required fields", () => {
-    expect(TOUR_STEPS.length).toBe(5);
+  test("has 3 distinct concept steps with required fields", () => {
+    expect(TOUR_STEPS.length).toBe(3);
     const ids = new Set(TOUR_STEPS.map((s) => s.id));
-    expect(ids.size).toBe(5);
+    expect(ids.size).toBe(3);
 
     for (const step of TOUR_STEPS) {
       expect(step.id.length).toBeGreaterThan(0);
@@ -24,29 +24,39 @@ describe("onboarding tour steps", () => {
 
   test("covers the core concepts in order", () => {
     expect(TOUR_STEPS[0].title).toContain("Hub");
-    expect(TOUR_STEPS[1].title).toContain("Agents");
-    expect(TOUR_STEPS[2].title).toContain("Devices");
-    expect(TOUR_STEPS[3].title).toContain("Tasks");
-    expect(TOUR_STEPS[4].title).toContain("Checklist");
+    expect(TOUR_STEPS[1].title).toContain("Devices");
+    expect(TOUR_STEPS[2].title).toContain("Agents");
   });
 });
 
-describe("setup checklist computation", () => {
-  test("initial empty state", () => {
+describe("setup checklist computation (3-step guided setup)", () => {
+  test("initial empty state: 0 of 3 complete, step 1 highlighted", () => {
     const cl = computeChecklist({ connected: true, devices: [], agents: [], tasks: [] }, false);
     expect(cl.hubReachable).toBe(true);
     expect(cl.deviceEnrolled).toBe(false);
     expect(cl.agentCreated).toBe(false);
     expect(cl.taskCreated).toBe(false);
-    expect(cl.publicUrlConfigured).toBe(false);
-    expect(cl.completedCount).toBe(1); // Hub reachable is 1 of 4
-    expect(cl.totalRequired).toBe(4);
+    expect(cl.completedCount).toBe(0);
+    expect(cl.totalRequired).toBe(3);
     expect(cl.isComplete).toBe(false);
     expect(cl.isVisible).toBe(true);
+
+    expect(cl.items.length).toBe(3);
+    expect(cl.items[0].id).toBe("device");
+    expect(cl.items[0].active).toBe(true);
+    expect(cl.items[0].done).toBe(false);
+
+    expect(cl.items[1].id).toBe("agent");
+    expect(cl.items[1].active).toBe(false);
+    expect(cl.items[1].done).toBe(false);
+
+    expect(cl.items[2].id).toBe("task");
+    expect(cl.items[2].active).toBe(false);
+    expect(cl.items[2].done).toBe(false);
   });
 
-  test("ticking as state changes", () => {
-    // 1. Device added
+  test("ticking as state changes and highlighting the next undone step", () => {
+    // 1. Device added -> 1 of 3, step 2 highlighted
     let cl = computeChecklist({
       connected: true,
       devices: [{ id: "dev-1", name: "laptop", online: true }],
@@ -54,11 +64,15 @@ describe("setup checklist computation", () => {
       tasks: []
     });
     expect(cl.deviceEnrolled).toBe(true);
-    expect(cl.completedCount).toBe(2);
+    expect(cl.completedCount).toBe(1);
+    expect(cl.totalRequired).toBe(3);
     expect(cl.isComplete).toBe(false);
     expect(cl.isVisible).toBe(true);
+    expect(cl.items[0].done).toBe(true);
+    expect(cl.items[0].active).toBe(false);
+    expect(cl.items[1].active).toBe(true); // Step 2 highlighted
 
-    // 2. Agent created
+    // 2. Agent created -> 2 of 3, step 3 highlighted
     cl = computeChecklist({
       connected: true,
       devices: [{ id: "dev-1", name: "laptop", online: true }],
@@ -66,10 +80,14 @@ describe("setup checklist computation", () => {
       tasks: []
     });
     expect(cl.agentCreated).toBe(true);
-    expect(cl.completedCount).toBe(3);
+    expect(cl.completedCount).toBe(2);
     expect(cl.isComplete).toBe(false);
+    expect(cl.isVisible).toBe(true);
+    expect(cl.items[0].done).toBe(true);
+    expect(cl.items[1].done).toBe(true);
+    expect(cl.items[2].active).toBe(true); // Step 3 highlighted
 
-    // 3. Task created
+    // 3. Task created -> 3 of 3 complete, card disappears
     cl = computeChecklist({
       connected: true,
       devices: [{ id: "dev-1", name: "laptop", online: true }],
@@ -77,7 +95,7 @@ describe("setup checklist computation", () => {
       tasks: [{ id: "task-1", key: "AGEN-1", title: "First task" }]
     });
     expect(cl.taskCreated).toBe(true);
-    expect(cl.completedCount).toBe(4);
+    expect(cl.completedCount).toBe(3);
     expect(cl.isComplete).toBe(true);
     // Disappears when done
     expect(cl.isVisible).toBe(false);
@@ -89,20 +107,6 @@ describe("setup checklist computation", () => {
     expect(cl.isVisible).toBe(false);
   });
 
-  test("optional public URL item", () => {
-    const withPublic = computeChecklist({
-      connected: true,
-      publicUrl: "https://fleet.example.com",
-      devices: [],
-      agents: [],
-      tasks: []
-    });
-    expect(withPublic.publicUrlConfigured).toBe(true);
-    expect(withPublic.publicUrl).toBe("https://fleet.example.com");
-    // Public URL does not change the required total
-    expect(withPublic.totalRequired).toBe(4);
-  });
-
   test("external agents do not satisfy first agent check", () => {
     const cl = computeChecklist({
       connected: true,
@@ -111,7 +115,32 @@ describe("setup checklist computation", () => {
       tasks: []
     });
     expect(cl.agentCreated).toBe(false);
-    expect(cl.completedCount).toBe(1);
+    expect(cl.completedCount).toBe(0);
+  });
+
+  test("step actions, tabs, and hashes are correctly configured", () => {
+    const cl = computeChecklist({ connected: true, devices: [], agents: [], tasks: [] }, false);
+    expect(cl.items[0].action).toBe("Add a device");
+    expect(cl.items[0].hash).toBe("#/devices");
+    expect(cl.items[1].action).toBe("Start agent");
+    expect(cl.items[1].hash).toBe("#/devices");
+    expect(cl.items[2].action).toBe("Create task");
+    expect(cl.items[2].hash).toBe("#/tasks");
+  });
+
+  test("tracks device, agent, and task counts accurately", () => {
+    const cl = computeChecklist({
+      connected: true,
+      devices: [{ id: "d1" }, { id: "d2" }],
+      agents: [{ id: "a1", external: false }, { id: "a2", external: true }],
+      tasks: [{ id: "t1" }, { id: "t2" }, { id: "t3" }]
+    });
+    expect(cl.deviceCount).toBe(2);
+    expect(cl.agentCount).toBe(1);
+    expect(cl.taskCount).toBe(3);
+    expect(cl.completedCount).toBe(3);
+    expect(cl.isComplete).toBe(true);
+    expect(cl.isVisible).toBe(false);
   });
 });
 
@@ -121,48 +150,41 @@ describe("shouldAutoOpenTour", () => {
     setItem: (k: string, v: string) => { data[k] = v; }
   });
 
-  test("opens on first visit after login", () => {
+  test("fresh hub has no overlay by default (guided setup is inline)", () => {
     const s = mockStorage();
-    expect(shouldAutoOpenTour({ storage: s, agentCount: 5, taskCount: 3 })).toBe(true);
+    expect(shouldAutoOpenTour({ storage: s, deviceCount: 0, agentCount: 0, taskCount: 0 })).toBe(false);
   });
 
-  test("opens on empty hub", () => {
+  test("opens when tour=1 query param is explicitly set", () => {
     const s = mockStorage();
-    expect(shouldAutoOpenTour({ storage: s, agentCount: 0, taskCount: 0 })).toBe(true);
+    const params = new URLSearchParams("tour=1");
+    expect(shouldAutoOpenTour({ storage: s, params, deviceCount: 0, agentCount: 0, taskCount: 0 })).toBe(true);
   });
 
-  test("does not open when tour is completed", () => {
+  test("does not open when tour is marked completed", () => {
     const s = mockStorage({ [TOUR_DONE_KEY]: "1" });
-    expect(shouldAutoOpenTour({ storage: s, agentCount: 0, taskCount: 0 })).toBe(false);
+    expect(shouldAutoOpenTour({ storage: s, deviceCount: 0, agentCount: 0, taskCount: 0 })).toBe(false);
   });
 
   test("does not open when tour is dismissed in session", () => {
     const s = mockStorage({ "fleet-tour-dismissed": "1" });
-    expect(shouldAutoOpenTour({ storage: s, agentCount: 0, taskCount: 0 })).toBe(false);
+    expect(shouldAutoOpenTour({ storage: s, deviceCount: 0, agentCount: 0, taskCount: 0 })).toBe(false);
   });
 
   test("respects notour query param", () => {
     const s = mockStorage();
     const params = new URLSearchParams("notour=1");
-    expect(shouldAutoOpenTour({ storage: s, params, agentCount: 0, taskCount: 0 })).toBe(false);
+    expect(shouldAutoOpenTour({ storage: s, params, deviceCount: 0, agentCount: 0, taskCount: 0 })).toBe(false);
   });
 
   test("respects tour=0 query param", () => {
     const s = mockStorage();
     const params = new URLSearchParams("tour=0");
-    expect(shouldAutoOpenTour({ storage: s, params, agentCount: 0, taskCount: 0 })).toBe(false);
+    expect(shouldAutoOpenTour({ storage: s, params, deviceCount: 0, agentCount: 0, taskCount: 0 })).toBe(false);
   });
 
-  test("suppresses tour on preview-only with populated hub unless tour=1", () => {
+  test("never appears automatically after the three steps are done", () => {
     const s = mockStorage();
-    const params = new URLSearchParams("token=preview-only");
-    expect(shouldAutoOpenTour({ storage: s, params, agentCount: 2, taskCount: 1 })).toBe(false);
-
-    // Empty hub on preview-only still opens tour for verification
-    expect(shouldAutoOpenTour({ storage: s, params, agentCount: 0, taskCount: 0 })).toBe(true);
-
-    // Explicit tour=1 opens even on populated preview
-    const tourParams = new URLSearchParams("token=preview-only&tour=1");
-    expect(shouldAutoOpenTour({ storage: s, params: tourParams, agentCount: 2, taskCount: 1 })).toBe(true);
+    expect(shouldAutoOpenTour({ storage: s, deviceCount: 1, agentCount: 1, taskCount: 1 })).toBe(false);
   });
 });

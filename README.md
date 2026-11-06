@@ -28,7 +28,7 @@ bun cli/fleet.ts hub init
 
 The command starts the hub, installs the `fleet` command in `~/.local/bin`, signs this machine in, and prints a **web address and human token**. It chooses your tailnet address when available, otherwise loopback, and stores data in `~/.fleet/hub-data`. If `fleet` is not on PATH, follow the printed PATH instruction and open a new terminal.
 
-Open the printed web address and enter the human token. The first-run tour explains the hub, workspaces, agents and device setup, then opens a setup checklist. Keep the human token private: it controls the whole hub.
+Open the printed web address and enter the human token. A three-step guide walks you through adding a device, starting an agent, and assigning your first task. Keep the human token private: it controls the whole hub.
 
 ### 2. Add a device
 

@@ -68,6 +68,7 @@ export function parseCommand(query) {
   const verb = (cut < 0 ? rest : rest.slice(0, cut)).toLowerCase();
   const arg = cut < 0 ? "" : rest.slice(cut + 1).trim();
   const kind = VERB_KIND[verb];
+  if (verb === "schedule" || verb === "checkins") return { kind: "key", arg: arg || "Status updates" };
   if (verb === "tour") return { kind: "key", arg: arg || "tour" };
   return kind ? { kind, arg } : { kind: null, arg: rest.trim() };
 }
@@ -90,6 +91,7 @@ export function paletteItems(source = {}) {
     out.push({ kind: "tab", label: tab.label, detail: "go to " + tab.label, keywords: ["tab", "go", tab.view], target: "tab:" + tab.view });
   for (const e of source.keymapActions || [])
     out.push({ kind: "key", label: e.label, detail: "run" + (e.keys && e.keys.length ? " · " + e.keys.join(" / ") : ""), keywords: ["key", "run", e.action, e.id], target: "key:" + e.id });
+  if(source.checkins)out.push({kind:"key",label:"Status updates",detail:"scheduled check-ins",keywords:["schedule","checkins","check-in","timer"],target:"schedule:open"});
   if (source.tour)
     out.push({ kind: "key", label: "Welcome tour", detail: "take the first-run tour", keywords: ["tour", "welcome", "onboarding", "intro", "help"], target: "tour:open" });
   return out;

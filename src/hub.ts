@@ -1,3 +1,4 @@
+import { createSchedule, updateSchedule, deleteSchedule, tickSchedules, schedulesView, type ScheduleInput, type SchedulePatch } from "./schedules";
 import { mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import type { KnowledgeContext, KnowledgeInput } from "./knowledge";
 import type { Agent, Artifact, Workspace, ArtifactKind, Evidence, Message, Request, RequestKind, Store, Task, TaskEvent, TaskStatus } from "./store";
@@ -56,6 +57,15 @@ export class Hub {
   offerMs = 15 * 60_000;
 
   constructor(public store: Store) {}
+  private scheduleTimer?:ReturnType<typeof setInterval>;
+  createSchedule(input:ScheduleInput,now=Date.now()){return createSchedule(this,input,now);}
+  updateSchedule(id:string,patch:SchedulePatch,now=Date.now()){return updateSchedule(this,id,patch,now);}
+  deleteSchedule(id:string){return deleteSchedule(this,id);}
+  schedulesView(){return schedulesView(this);}
+  tickSchedules(now=Date.now()){return tickSchedules(this,now);}
+  startScheduleTicker(){if(this.scheduleTimer)return;const tick=()=>{try{this.tickSchedules();}catch(e){console.error("schedule tick failed",e);}};tick();this.scheduleTimer=setInterval(tick,30000);this.scheduleTimer.unref();}
+  stopScheduleTicker(){if(this.scheduleTimer)clearInterval(this.scheduleTimer);this.scheduleTimer=undefined;}
+
 
   private knowledgeContext(agent: Agent): KnowledgeContext {
     return { workspaceId: agent.workspaceId, actor: agent.id, allowed: !this.isExternal(agent) && !agent.quarantined };
@@ -113,7 +123,7 @@ export class Hub {
 
   activityOf(agentId: string, nowMs = Date.now()): Activity {
     const a = this.activity.get(agentId);
-    if (!a || nowMs - a.since > WORKING_TTL_MS) return { state: "idle", since: a?.since ?? 0 };
+    if (!a || (nowMs - a.since > WORKING_TTL_MS && nowMs - (this.store.agentById(agentId)?.lastSeen ?? 0) >= 45000)) return { state: "idle", since: a?.since ?? 0 };
     return a;
   }
 

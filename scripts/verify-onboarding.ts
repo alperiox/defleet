@@ -1,5 +1,5 @@
 // bun scripts/verify-onboarding.ts [output-directory]
-// Drives the first-run welcome tour, setup checklist, and view empty states.
+// Drives the 3-step first-run guided setup, live ticking, dismiss/restore, and optional concept tour.
 // Routes Chromium requests straight to Hono: no HTTP listener or preview server.
 import { createRequire } from "node:module";
 import { mkdirSync } from "node:fs";
@@ -67,108 +67,97 @@ try {
       const { app, hub, store } = createApp(":memory:", "preview-only");
       const page = await setupPage(app, theme, width);
 
-      // 1. First visit on a fresh empty hub: tour opens automatically
+      // 1. Fresh hub: no overlay by default, 3-step setup card is immediately visible on Needs you
       await page.goto("http://fleet.test/?token=preview-only#/inbox");
-      await page.locator("#tour").waitFor({ state: "visible" });
-      check(`[${theme}-${width}] tour opens automatically on empty hub`, await page.locator("#tour").isVisible());
-
-      // Tour Step 1 check & screenshot
-      const step1Title = await page.locator("#tour-title").innerText();
-      eq(`[${theme}-${width}] tour step 1 title`, step1Title, "The Hub & Workspaces");
-      await checkNoScroll(page, `${theme}-${width}-tour-step1`);
-      await page.screenshot({ path: `${output}/${theme}-${width}-tour-step1.png` });
-
-      // ArrowRight to Step 2
-      await press(page, "ArrowRight");
-      const step2Title = await page.locator("#tour-title").innerText();
-      eq(`[${theme}-${width}] tour step 2 title`, step2Title, "Autonomous Agents");
-
-      // ArrowRight to Step 3 (middle step) & screenshot
-      await press(page, "ArrowRight");
-      const step3Title = await page.locator("#tour-title").innerText();
-      eq(`[${theme}-${width}] tour step 3 title`, step3Title, "Devices & Local Code");
-      await checkNoScroll(page, `${theme}-${width}-tour-middle`);
-      await page.screenshot({ path: `${output}/${theme}-${width}-tour-middle.png` });
-
-      // ArrowLeft goes back to Step 2
-      await press(page, "ArrowLeft");
-      eq(`[${theme}-${width}] tour arrow left returns to step 2`, await page.locator("#tour-title").innerText(), "Autonomous Agents");
-
-      // Advance to step 5
-      await press(page, "ArrowRight"); // step 3
-      await press(page, "ArrowRight"); // step 4
-      await press(page, "ArrowRight"); // step 5
-      const step5Title = await page.locator("#tour-title").innerText();
-      eq(`[${theme}-${width}] tour step 5 title`, step5Title, "Setup Checklist");
-
-      // Click "Open setup checklist" on step 5
-      await page.locator("#tour-checklist-btn").click();
-      await page.locator("#tour").waitFor({ state: "hidden" });
-      check(`[${theme}-${width}] tour closed via checklist button`, !(await page.locator("#tour").isVisible()));
-
-      // 2. Setup checklist is now visible on Needs you
       await page.locator("#setup-checklist").waitFor({ state: "visible" });
-      check(`[${theme}-${width}] checklist visible on Needs you`, await page.locator("#setup-checklist").isVisible());
+      check(`[${theme}-${width}] no automatic overlay on fresh hub`, !(await page.locator("#tour").isVisible()));
+      check(`[${theme}-${width}] 3-step checklist visible on fresh hub`, await page.locator("#setup-checklist").isVisible());
 
-      // Check checklist state: initially 1 of 4 (hub reachable)
+      // Progress initially 0 of 3
       const initialProgress = await page.locator(".checklist-progress").innerText();
-      check(`[${theme}-${width}] initial checklist progress 1 of 4`, initialProgress.toLowerCase().includes("1 of 4"), `got: "${initialProgress}"`);
+      check(`[${theme}-${width}] initial progress 0 of 3`, initialProgress.toLowerCase().includes("0 of 3"), `got: "${initialProgress}"`);
 
-      // Enroll a device and simulate state update
+      // Step 1 highlighted
+      const step1Active = await page.locator('.checklist-item[data-checklist-id="device"]').getAttribute("class");
+      check(`[${theme}-${width}] step 1 highlighted`, step1Active?.includes("active") ?? false);
+
+      // Inline curl command with copy button
+      const hasCurlCmd = await page.locator('.checklist-item[data-checklist-id="device"] code').innerText();
+      check(`[${theme}-${width}] inline install command`, hasCurlCmd.includes("install.sh | sh"), `got: "${hasCurlCmd}"`);
+
+      // Screenshot 1: the fresh hub with the 3-step card
+      await checkNoScroll(page, `${theme}-${width}-fresh-hub`);
+      await page.screenshot({ path: `${output}/${theme}-${width}-fresh-hub-3steps.png` });
+
+      // 2. Step 1 done (device added) and Step 2 highlighted
       store.addDevice("macbook");
       await triggerRefresh(page);
       await page.waitForTimeout(60);
 
-      // Now 2 of 4 complete
+      const prog1 = await page.locator(".checklist-progress").innerText();
+      check(`[${theme}-${width}] progress 1 of 3 after device`, prog1.toLowerCase().includes("1 of 3"), `got: "${prog1}"`);
+
+      const step1Done = await page.locator('.checklist-item[data-checklist-id="device"]').getAttribute("class");
+      check(`[${theme}-${width}] step 1 marked done`, step1Done?.includes("done") ?? false);
+
+      const step2Active = await page.locator('.checklist-item[data-checklist-id="agent"]').getAttribute("class");
+      check(`[${theme}-${width}] step 2 highlighted after device`, step2Active?.includes("active") ?? false);
+
+      // Screenshot 2: step 1 done and step 2 highlighted
+      await checkNoScroll(page, `${theme}-${width}-step1done`);
+      await page.screenshot({ path: `${output}/${theme}-${width}-step1done-step2highlighted.png` });
+
+      // 3. Step 2 done (agent started) and Step 3 highlighted
+      store.addAgent({ name: "claude-1", owner: "owner", device: "macbook", skills: [] });
+      await triggerRefresh(page);
+      await page.waitForTimeout(60);
+
       const prog2 = await page.locator(".checklist-progress").innerText();
-      check(`[${theme}-${width}] checklist progress 2 of 4 after device`, prog2.toLowerCase().includes("2 of 4"), `got: "${prog2}"`);
-      await checkNoScroll(page, `${theme}-${width}-checklist`);
-      await page.screenshot({ path: `${output}/${theme}-${width}-checklist.png` });
+      check(`[${theme}-${width}] progress 2 of 3 after agent`, prog2.toLowerCase().includes("2 of 3"), `got: "${prog2}"`);
 
-      // 3. Three empty states: Needs you, Room, Tasks
-      // (a) Needs you empty state
-      const noreq = page.locator("#noreq");
-      check(`[${theme}-${width}] Needs you empty state visible`, await noreq.isVisible());
-      check(`[${theme}-${width}] Needs you empty title`, (await noreq.locator(".empty-title").innerText()).includes("Nothing is waiting"));
-      await checkNoScroll(page, `${theme}-${width}-empty-needsyou`);
-      await page.screenshot({ path: `${output}/${theme}-${width}-empty-needsyou.png` });
+      const step2Done = await page.locator('.checklist-item[data-checklist-id="agent"]').getAttribute("class");
+      check(`[${theme}-${width}] step 2 marked done`, step2Done?.includes("done") ?? false);
 
-      // (b) Room empty state
-      await page.goto("http://fleet.test/?token=preview-only#/room");
-      const roomEmpty = page.locator("#thread-msgs .empty");
-      await roomEmpty.waitFor({ state: "visible" });
-      check(`[${theme}-${width}] Room empty title`, (await roomEmpty.locator(".empty-title").innerText()).includes("No messages in the room"));
-      await checkNoScroll(page, `${theme}-${width}-empty-room`);
-      await page.screenshot({ path: `${output}/${theme}-${width}-empty-room.png` });
+      const step3Active = await page.locator('.checklist-item[data-checklist-id="task"]').getAttribute("class");
+      check(`[${theme}-${width}] step 3 highlighted after agent`, step3Active?.includes("active") ?? false);
 
-      // (c) Tasks empty state
-      await page.goto("http://fleet.test/?token=preview-only#/tasks");
-      const tasksEmpty = page.locator("#taskList .empty");
-      await tasksEmpty.waitFor({ state: "visible" });
-      check(`[${theme}-${width}] Tasks empty title`, (await tasksEmpty.locator(".empty-title").innerText()).includes("No tasks here"));
-      await checkNoScroll(page, `${theme}-${width}-empty-tasks`);
-      await page.screenshot({ path: `${output}/${theme}-${width}-empty-tasks.png` });
+      // 4. Step 3 done (task created) -> all done, card disappears, NO automatic overlay
+      hub.humanCreateTask({ title: "Add health check endpoint", project: "default" });
+      await triggerRefresh(page);
+      await page.waitForTimeout(60);
 
-      // 4. Test reopening the tour
-      // Reopen via Settings
+      check(`[${theme}-${width}] checklist card gone after completion`, !(await page.locator("#setup-checklist").isVisible()));
+      check(`[${theme}-${width}] no automatic overlay after completion`, !(await page.locator("#tour").isVisible()));
+
+      // Screenshot 3: all done (card gone)
+      await checkNoScroll(page, `${theme}-${width}-all-done`);
+      await page.screenshot({ path: `${output}/${theme}-${width}-all-done-card-gone.png` });
+
+      // 5. Reopen optional concept tour: Settings -> "How does this work?"
       await page.goto("http://fleet.test/?token=preview-only#/settings");
       await page.locator("#reopen-tour-btn").waitFor({ state: "visible" });
       await page.locator("#reopen-tour-btn").click();
       await page.locator("#tour").waitFor({ state: "visible" });
-      check(`[${theme}-${width}] tour reopened from Settings`, await page.locator("#tour").isVisible());
-      await press(page, "Escape");
-      await page.locator("#tour").waitFor({ state: "hidden" });
+      check(`[${theme}-${width}] optional concept tour opened from Settings`, await page.locator("#tour").isVisible());
+      eq(`[${theme}-${width}] tour slide 1 title`, await page.locator("#tour-title").innerText(), "The Hub & Workspaces");
 
-      // Reopen via '?' cheat-sheet
-      await press(page, "?");
-      await page.locator("#keysheet").waitFor({ state: "visible" });
-      await page.locator("#keysheet-tour").click();
-      await page.locator("#tour").waitFor({ state: "visible" });
-      check(`[${theme}-${width}] tour reopened from keysheet`, await page.locator("#tour").isVisible());
-      await press(page, "Escape");
-      await page.locator("#tour").waitFor({ state: "hidden" });
+      // Screenshot 4: the optional 'How does this work?' view
+      await checkNoScroll(page, `${theme}-${width}-how-it-works`);
+      await page.screenshot({ path: `${output}/${theme}-${width}-how-it-works-tour.png` });
 
-      // Reopen via ':' command palette
+      // Advance slides using ArrowRight and test last slide button
+      await press(page, "ArrowRight"); // Slide 2
+      eq(`[${theme}-${width}] tour slide 2 title`, await page.locator("#tour-title").innerText(), "Devices & Local Code");
+
+      await press(page, "ArrowRight"); // Slide 3
+      eq(`[${theme}-${width}] tour slide 3 title`, await page.locator("#tour-title").innerText(), "Agents, Tasks & Needs You");
+
+      // Close tour via checklist button on last slide
+      await page.locator("#tour-checklist-btn").click();
+      await page.locator("#tour").waitFor({ state: "hidden" });
+      check(`[${theme}-${width}] tour closed via action button`, !(await page.locator("#tour").isVisible()));
+
+      // 6. Test reopening via ':' command palette (:tour)
       await press(page, ":");
       await page.locator("#palette").waitFor({ state: "visible" });
       await page.keyboard.type("tour");
@@ -179,6 +168,54 @@ try {
       await press(page, "Escape");
       await page.locator("#tour").waitFor({ state: "hidden" });
 
+      // 7. Test Dismiss & Restore on a fresh hub
+      const { app: freshApp, store: freshStore } = createApp(":memory:", "preview-only");
+      const testPage = await setupPage(freshApp, theme, width);
+      await testPage.goto("http://fleet.test/?token=preview-only#/inbox");
+      await testPage.locator("#setup-checklist").waitFor({ state: "visible" });
+
+      // Click "How does this work?" on the card
+      await testPage.locator("#checklist-tour-btn").click();
+      await testPage.locator("#tour").waitFor({ state: "visible" });
+      check(`[${theme}-${width}] tour opened via card 'How does this work?' button`, await testPage.locator("#tour").isVisible());
+      await press(testPage, "Escape");
+      await testPage.locator("#tour").waitFor({ state: "hidden" });
+
+      // Dismiss checklist
+      await testPage.locator("#checklist-dismiss-btn").click();
+      check(`[${theme}-${width}] checklist hidden on dismiss`, !(await testPage.locator("#setup-checklist").isVisible()));
+
+      // Restore checklist from Settings
+      await testPage.goto("http://fleet.test/?token=preview-only#/settings");
+      await testPage.locator("#reset-checklist-btn").waitFor({ state: "visible" });
+      await testPage.locator("#reset-checklist-btn").click();
+
+      // Back to inbox -> checklist is visible again
+      await testPage.goto("http://fleet.test/?token=preview-only#/inbox");
+      await testPage.locator("#setup-checklist").waitFor({ state: "visible" });
+      check(`[${theme}-${width}] checklist restored from settings`, await testPage.locator("#setup-checklist").isVisible());
+
+      // 8. Empty states across tabs point at 3-step setup when fresh
+      // (a) Needs you empty state
+      const noreq = testPage.locator("#noreq");
+      check(`[${theme}-${width}] Needs you empty state visible`, await noreq.isVisible());
+      check(`[${theme}-${width}] Needs you empty title`, (await noreq.locator(".empty-title").innerText()).includes("Nothing is waiting"));
+
+      // (b) Room empty state
+      await testPage.goto("http://fleet.test/?token=preview-only#/room");
+      const roomEmpty = testPage.locator("#thread-msgs .empty");
+      await roomEmpty.waitFor({ state: "visible" });
+      check(`[${theme}-${width}] Room empty title`, (await roomEmpty.locator(".empty-title").innerText()).includes("No messages in the room"));
+      check(`[${theme}-${width}] Room empty desc points at setup`, (await roomEmpty.locator(".empty-desc").innerText()).includes("3-step setup"));
+
+      // (c) Tasks empty state
+      await testPage.goto("http://fleet.test/?token=preview-only#/tasks");
+      const tasksEmpty = testPage.locator("#taskList .empty");
+      await tasksEmpty.waitFor({ state: "visible" });
+      check(`[${theme}-${width}] Tasks empty title`, (await tasksEmpty.locator(".empty-title").innerText()).includes("No tasks here"));
+      check(`[${theme}-${width}] Tasks empty desc points at setup`, (await tasksEmpty.locator(".empty-desc").innerText()).includes("3-step setup"));
+
+      await testPage.close();
       await page.close();
     }
   }

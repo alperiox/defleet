@@ -13,8 +13,12 @@ export const CHECKLIST_DISMISSED_KEY: string;
 export interface ChecklistItem {
   id: string;
   label: string;
+  title?: string;
   why: string;
+  action?: string;
   done: boolean;
+  active?: boolean;
+  step?: number;
   optional?: boolean;
   tab: string;
   hash: string;
@@ -28,8 +32,8 @@ export interface ChecklistState {
   agentCount: number;
   taskCreated: boolean;
   taskCount: number;
-  publicUrlConfigured: boolean;
-  publicUrl: string | null;
+  publicUrlConfigured?: boolean;
+  publicUrl?: string | null;
   items: ChecklistItem[];
   completedCount: number;
   totalRequired: number;
@@ -42,6 +46,7 @@ export function computeChecklist(hubState?: any, dismissed?: boolean): Checklist
 export function shouldAutoOpenTour(options?: {
   storage?: { getItem(key: string): string | null } | null;
   params?: any;
+  deviceCount?: number;
   agentCount?: number;
   taskCount?: number;
 }): boolean;

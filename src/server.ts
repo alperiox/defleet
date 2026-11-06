@@ -26,7 +26,9 @@ function buildApp() {
     process.exit(1);
   }
 }
-const { app } = buildApp();
+const { app, hub } = buildApp();
+hub.startScheduleTicker();
+process.once("exit",()=>hub.stopScheduleTicker());
 
 // idleTimeout must exceed the longest wait_for_work (25s), or Bun cuts the call off.
 Bun.serve({ port, hostname: host, fetch: (request, server) => app.fetch(request, { remoteAddress: server.requestIP(request)?.address }), idleTimeout: 60 });

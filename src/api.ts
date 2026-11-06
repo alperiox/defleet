@@ -62,6 +62,11 @@ export function mountApi(app: Hono, hub: Hub, store: Store, humanToken: string, 
   app.patch("/api/knowledge/:id", (c) => knowledgeResponse(c, "edit"));
   for (const action of ["approve", "archive", "promote"]) app.post(`/api/knowledge/:id/${action}`, (c) => knowledgeResponse(c, action));
 
+  app.get("/api/schedules",c=>c.json(hub.schedulesView()));
+  app.post("/api/schedules",async c=>{try{return c.json(hub.createSchedule(await c.req.json()));}catch(e){return c.json({error:(e as Error).message},400);}});
+  app.patch("/api/schedules/:id",async c=>{try{return c.json(hub.updateSchedule(c.req.param("id"),await c.req.json()));}catch(e){return c.json({error:(e as Error).message},400);}});
+  app.delete("/api/schedules/:id",c=>{try{return c.json(hub.deleteSchedule(c.req.param("id")));}catch(e){return c.json({error:(e as Error).message},404);}});
+
   app.get("/api/repos", async (c) => c.json(await listRepos(dataDir,store)));
   app.get("/api/storage", (c)=>c.json(storage()));
   app.post("/api/repos/:project/integrate",async c=>{try{const b=await c.req.json();const r=await integrate(dataDir,store,c.req.param("project"),b.branch,b.expectedMain,"human");store.addMessage({thread:"room",from:"human",text:`Integrated ${r.project} ${r.branch}: ${r.fromSha.slice(0,8)} → ${r.toSha.slice(0,8)}`});hub.notify();return c.json(r);}catch(e){return c.json({error:(e as Error).message},409);}});
@@ -85,6 +90,7 @@ export function mountApi(app: Hono, hub: Hub, store: Store, humanToken: string, 
     for (const a of arts) if (a.messageId != null) (onMsg.get(a.messageId) ?? onMsg.set(a.messageId, []).get(a.messageId)!).push({ id: a.id, kind: a.kind, name: a.name, size: a.size, mime: a.mime, url: a.url });
     const withFiles = (m: any) => ({ ...m, attachments: onMsg.get(m.id) ?? [] });
     return c.json({
+      schedules: hub.schedulesView(),
       knowledgeMeta: store.knowledgeMeta(),
       attachmentLimits: { maxBytes: hub.humanAttachmentMaxBytes, maxCount: hub.humanAttachmentMaxCount },
       roomReplies: store.listWorkspaces().flatMap((w) => { const reply = hub.roomReplyWindow(w.id); return reply ? [reply] : []; }),

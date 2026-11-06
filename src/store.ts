@@ -1,3 +1,4 @@
+import { scheduleStore } from "./schedules";
 import { Database } from "bun:sqlite";
 import { createHash, randomBytes } from "node:crypto";
 import { knowledgeStore } from "./knowledge";
@@ -163,6 +164,7 @@ export function openStore(path: string, options: { knowledgeFts?: boolean } = {}
   });
 
   return {
+    ...scheduleStore(db),
     dbPath: path,
     ...knowledgeStore(db, options.knowledgeFts),
     db,
@@ -482,8 +484,8 @@ export function openStore(path: string, options: { knowledgeFts?: boolean } = {}
       return db.query("SELECT id, task_id AS taskId, kind, ref, note FROM evidence WHERE task_id = ? ORDER BY id").all(taskId) as Evidence[];
     },
 
-    addMessage(m: { thread: string; from: string; text: string; tainted?: boolean; replyToAgent?: string }): Message {
-      const res = db.query("INSERT INTO messages (thread,sender,text,created_at,tainted,reply_to_agent) VALUES (?,?,?,?,?,?)").run(m.thread, m.from, m.text, now(), m.tainted ? 1 : 0, m.replyToAgent ?? null);
+    addMessage(m: { thread: string; from: string; text: string; tainted?: boolean; replyToAgent?: string }, createdAt = now()): Message {
+      const res = db.query("INSERT INTO messages (thread,sender,text,created_at,tainted,reply_to_agent) VALUES (?,?,?,?,?,?)").run(m.thread, m.from, m.text, createdAt, m.tainted ? 1 : 0, m.replyToAgent ?? null);
       return toMessage(db.query("SELECT * FROM messages WHERE id = ?").get(Number(res.lastInsertRowid)));
     },
     latestAgentMessage(thread: string): Message | null {
